@@ -1,0 +1,5 @@
+pydantic>=2.7,<3.0
+aiogram>=3.10,<4.0
+requests>=2.32,<3.0
+beautifulsoup4>=4.12,<5.0
+selenium>=4.28,<5.0
