@@ -1,4 +1,4 @@
-from src.scrapers import fetch_justjoinit_offers
+from src.scrapers import JustJoinItScraper
 from src.storage import SQLiteOfferStore
 
 
@@ -13,7 +13,8 @@ def _format_salary(salary_min_pln: int | None, salary_max_pln: int | None) -> st
 
 
 def main() -> None:
-	offers = fetch_justjoinit_offers(limit=10)
+	scraper = JustJoinItScraper()
+	offers = scraper.fetch_offers(limit=10)
 	store = SQLiteOfferStore()
 	inserted = store.save_offers(offers)
 

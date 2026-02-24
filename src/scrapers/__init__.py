@@ -1,3 +1,4 @@
-from .justjoinit import fetch_justjoinit_offers
+from .base import JobScraper
+from .justjoinit import JustJoinItScraper, fetch_justjoinit_offers
 
-__all__ = ["fetch_justjoinit_offers"]
+__all__ = ["JobScraper", "JustJoinItScraper", "fetch_justjoinit_offers"]
