@@ -1,3 +1,4 @@
+from src.config import load_config
 from src.filters import OfferFilter, filter_offers
 from src.scrapers import JustJoinItScraper
 from src.storage import SQLiteOfferStore
@@ -14,16 +15,21 @@ def _format_salary(salary_min_pln: int | None, salary_max_pln: int | None) -> st
 
 
 def main() -> None:
+	config = load_config()
+	limit = int(config.get("limit", 30))
+	db_path = config.get("db_path", "jobpulse.db")
+	filters = config.get("filters", {}) or {}
+
 	scraper = JustJoinItScraper()
-	offers = scraper.fetch_offers(limit=30)
+	offers = scraper.fetch_offers(limit=limit)
 
 	offer_filter = OfferFilter(
-		min_salary_pln=12000,
-		city=None,
-		must_have_skills=["python"],
+		min_salary_pln=filters.get("min_salary_pln"),
+		city=filters.get("city"),
+		must_have_skills=filters.get("must_have_skills"),
 	)
 	filtered_offers = filter_offers(offers, offer_filter)
-	store = SQLiteOfferStore()
+	store = SQLiteOfferStore(db_path=db_path)
 	inserted = store.save_offers(filtered_offers)
 
 	print(f"Pobrano ofert: {len(offers)}")
