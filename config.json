@@ -1,0 +1,10 @@
+{
+  "sources": ["justjoinit"],
+  "limit": 30,
+  "db_path": "jobpulse.db",
+  "filters": {
+    "min_salary_pln": null,
+    "city": null,
+    "must_have_skills": []
+  }
+}

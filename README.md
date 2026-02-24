@@ -20,10 +20,15 @@ The initial proof-of-concept is implemented.
 - Project skeleton and package structure (`src/models`, `src/scrapers`, `main.py`)
 - Unified `JobOffer` data model using Pydantic
 - First JustJoinIT scraper (Selenium-based)
+- Scraper interface and class-based source integration
 - Basic pipeline in `main.py`:
-  - fetch offers
-  - map to `JobOffer`
-  - print a compact console preview
+	- fetch offers
+	- map to `JobOffer`
+	- apply filters
+	- store in SQLite
+	- print a compact console preview
+- Local SQLite storage with deduplication (`source + external_id`)
+- Config file for runtime settings (`config.json`)
 - Basic project configuration (`.gitignore`, `requirements.txt`)
 
 ### Current Scope of Data Mapping
@@ -39,21 +44,30 @@ Current stack used in the repository:
 * **Data Model & Validation:** `pydantic`
 * **Web Scraping:** `selenium` (current POC), `requests` / `BeautifulSoup` for future sources where applicable
 * **Bot Layer (planned next phase):** `aiogram`
-* **Persistence (planned next phase):** SQLite first, PostgreSQL later
+* **Persistence:** SQLite (current), PostgreSQL later
 
 ## 🗂️ Project Structure
 
 ```
 .
 ├── main.py
+├── config.json
 ├── requirements.txt
 ├── src
+│   ├── config.py
+│   ├── filters
+│   │   ├── __init__.py
+│   │   └── simple_filter.py
 │   ├── models
 │   │   ├── __init__.py
 │   │   └── job_offer.py
 │   └── scrapers
 │       ├── __init__.py
+│       ├── base.py
 │       └── justjoinit.py
+│   └── storage
+│       ├── __init__.py
+│       └── sqlite_store.py
 └── TASKS.md
 ```
 
@@ -69,21 +83,18 @@ python main.py
 1. **Improve field completeness**
 	- Add optional detail-page enrichment for `workplace_type`, `employment_type`, and richer salary metadata.
 
-2. **Add persistence layer**
-	- Save normalized offers in SQLite.
-	- Add deduplication by `source + external_id`.
+2. **Validate configuration**
+	- Add config validation with `pydantic`.
+	- Support environment-specific overrides (e.g., `config.local.json`).
 
-3. **Introduce source abstraction**
-	- Define a common scraper interface.
-	- Prepare onboarding for additional sources (e.g., theprotocol).
+3. **Expand sources**
+	- Add a scraper registry and plug in additional sources (e.g., theprotocol).
 
 4. **Add Telegram bot MVP**
 	- Create a basic bot command set.
 	- Send latest matching offers for a simple user profile.
 
-5. **Add filtering and user configuration**
-	- Introduce per-user filters (tech, salary threshold, remote preference, contract type).
+5. **Enhance filtering**
+	- Add per-user filters (tech, salary threshold, remote preference, contract type).
+	- Add fuzzy matching for skills.
 
-6. **Add scheduling and automation**
-	- Run scraping on interval.
-	- Process only new offers and trigger notifications.

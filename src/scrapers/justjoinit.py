@@ -250,3 +250,10 @@ def fetch_justjoinit_offers(limit: int = 20, timeout: int = 15) -> list[JobOffer
         except Exception:
             continue
     return offers
+
+
+class JustJoinItScraper:
+    source = "justjoinit"
+
+    def fetch_offers(self, limit: int = 20, timeout: int = 15) -> list[JobOffer]:
+        return fetch_justjoinit_offers(limit=limit, timeout=timeout)
