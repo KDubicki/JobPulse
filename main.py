@@ -1,4 +1,5 @@
 from src.scrapers import fetch_justjoinit_offers
+from src.storage import SQLiteOfferStore
 
 
 def _format_salary(salary_min_pln: int | None, salary_max_pln: int | None) -> str:
@@ -13,8 +14,11 @@ def _format_salary(salary_min_pln: int | None, salary_max_pln: int | None) -> st
 
 def main() -> None:
 	offers = fetch_justjoinit_offers(limit=10)
+	store = SQLiteOfferStore()
+	inserted = store.save_offers(offers)
 
 	print(f"Pobrano ofert: {len(offers)}")
+	print(f"Zapisano nowych ofert: {inserted}")
 	for index, offer in enumerate(offers, start=1):
 		salary = _format_salary(offer.salary_min_pln, offer.salary_max_pln)
 		skills_preview = ", ".join(offer.skills[:4]) if offer.skills else "brak"
