@@ -1,3 +1,4 @@
+from src.filters import OfferFilter, filter_offers
 from src.scrapers import JustJoinItScraper
 from src.storage import SQLiteOfferStore
 
@@ -14,13 +15,21 @@ def _format_salary(salary_min_pln: int | None, salary_max_pln: int | None) -> st
 
 def main() -> None:
 	scraper = JustJoinItScraper()
-	offers = scraper.fetch_offers(limit=10)
+	offers = scraper.fetch_offers(limit=30)
+
+	offer_filter = OfferFilter(
+		min_salary_pln=12000,
+		city=None,
+		must_have_skills=["python"],
+	)
+	filtered_offers = filter_offers(offers, offer_filter)
 	store = SQLiteOfferStore()
-	inserted = store.save_offers(offers)
+	inserted = store.save_offers(filtered_offers)
 
 	print(f"Pobrano ofert: {len(offers)}")
+	print(f"Po filtrach: {len(filtered_offers)}")
 	print(f"Zapisano nowych ofert: {inserted}")
-	for index, offer in enumerate(offers, start=1):
+	for index, offer in enumerate(filtered_offers, start=1):
 		salary = _format_salary(offer.salary_min_pln, offer.salary_max_pln)
 		skills_preview = ", ".join(offer.skills[:4]) if offer.skills else "brak"
 		print(
