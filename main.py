@@ -1,6 +1,6 @@
 from src.config import load_config
 from src.filters import OfferFilter, filter_offers
-from src.scrapers import JustJoinItScraper
+from src.scrapers import get_scrapers
 from src.storage import SQLiteOfferStore
 
 
@@ -20,8 +20,10 @@ def main() -> None:
 	db_path = config.db_path
 	filters = config.filters
 
-	scraper = JustJoinItScraper()
-	offers = scraper.fetch_offers(limit=limit)
+	scrapers = get_scrapers(config.sources)
+	offers = []
+	for scraper in scrapers:
+		offers.extend(scraper.fetch_offers(limit=limit))
 
 	offer_filter = OfferFilter(
 		min_salary_pln=filters.min_salary_pln,
