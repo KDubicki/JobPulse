@@ -16,17 +16,17 @@ def _format_salary(salary_min_pln: int | None, salary_max_pln: int | None) -> st
 
 def main() -> None:
 	config = load_config()
-	limit = int(config.get("limit", 30))
-	db_path = config.get("db_path", "jobpulse.db")
-	filters = config.get("filters", {}) or {}
+	limit = config.limit
+	db_path = config.db_path
+	filters = config.filters
 
 	scraper = JustJoinItScraper()
 	offers = scraper.fetch_offers(limit=limit)
 
 	offer_filter = OfferFilter(
-		min_salary_pln=filters.get("min_salary_pln"),
-		city=filters.get("city"),
-		must_have_skills=filters.get("must_have_skills"),
+		min_salary_pln=filters.min_salary_pln,
+		city=filters.city,
+		must_have_skills=filters.must_have_skills,
 	)
 	filtered_offers = filter_offers(offers, offer_filter)
 	store = SQLiteOfferStore(db_path=db_path)
