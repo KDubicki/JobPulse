@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import re
 
 from src.models import JobOffer
 
@@ -11,7 +12,10 @@ class OfferFilter:
 
     def matches(self, offer: JobOffer) -> bool:
         if self.min_salary_pln is not None:
-            if offer.salary_min_pln is None or offer.salary_min_pln < self.min_salary_pln:
+            salary_floor = offer.salary_min_pln
+            if salary_floor is None:
+                salary_floor = offer.salary_max_pln
+            if salary_floor is None or salary_floor < self.min_salary_pln:
                 return False
 
         if self.city:
@@ -19,9 +23,9 @@ class OfferFilter:
                 return False
 
         if self.must_have_skills:
-            normalized = {skill.lower() for skill in offer.skills}
+            normalized = {_normalize_skill(skill) for skill in offer.skills}
             for required in self.must_have_skills:
-                if required.lower() not in normalized:
+                if _normalize_skill(required) not in normalized:
                     return False
 
         return True
@@ -29,3 +33,8 @@ class OfferFilter:
 
 def filter_offers(offers: list[JobOffer], offer_filter: OfferFilter) -> list[JobOffer]:
     return [offer for offer in offers if offer_filter.matches(offer)]
+
+
+def _normalize_skill(skill: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", " ", skill.lower()).strip()
+    return " ".join(cleaned.split())

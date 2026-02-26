@@ -21,6 +21,7 @@ The initial proof-of-concept is implemented.
 - Unified `JobOffer` data model using Pydantic
 - First JustJoinIT scraper (Selenium-based)
 - Scraper interface and class-based source integration
+- Scraper registry driven by `config.json` sources
 - Basic pipeline in `main.py`:
 	- fetch offers
 	- map to `JobOffer`
@@ -28,7 +29,8 @@ The initial proof-of-concept is implemented.
 	- store in SQLite
 	- print a compact console preview
 - Local SQLite storage with deduplication (`source + external_id`)
-- Config file for runtime settings (`config.json`)
+- Config file for runtime settings with Pydantic validation (`config.json`)
+- DB viewer utility (`scripts/show_db.py`)
 - Basic project configuration (`.gitignore`, `requirements.txt`)
 
 ### Current Scope of Data Mapping
@@ -53,6 +55,8 @@ Current stack used in the repository:
 ├── main.py
 ├── config.json
 ├── requirements.txt
+├── scripts
+│   └── show_db.py
 ├── src
 │   ├── config.py
 │   ├── filters
@@ -64,6 +68,7 @@ Current stack used in the repository:
 │   └── scrapers
 │       ├── __init__.py
 │       ├── base.py
+│       ├── registry.py
 │       └── justjoinit.py
 │   └── storage
 │       ├── __init__.py
@@ -83,12 +88,9 @@ python main.py
 1. **Improve field completeness**
 	- Add optional detail-page enrichment for `workplace_type`, `employment_type`, and richer salary metadata.
 
-2. **Validate configuration**
-	- Add config validation with `pydantic`.
-	- Support environment-specific overrides (e.g., `config.local.json`).
-
-3. **Expand sources**
-	- Add a scraper registry and plug in additional sources (e.g., theprotocol).
+2. **Expand sources**
+	- Plug in additional sources (e.g., theprotocol).
+	- Normalize source-specific fields into the shared model.
 
 4. **Add Telegram bot MVP**
 	- Create a basic bot command set.
@@ -97,4 +99,5 @@ python main.py
 5. **Enhance filtering**
 	- Add per-user filters (tech, salary threshold, remote preference, contract type).
 	- Add fuzzy matching for skills.
+	- Add optional use of `salary_max_pln` for low-data offers.
 
