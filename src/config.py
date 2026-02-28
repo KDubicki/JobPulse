@@ -7,6 +7,10 @@ from pydantic import BaseModel, Field, ValidationError
 ENV_PREFIX = "JOBPULSE_"
 
 
+class ConfigError(Exception):
+    """Raised when configuration is invalid – message is user-friendly."""
+
+
 class FilterConfig(BaseModel):
     min_salary_pln: int | None = None
     city: str | None = None
@@ -62,7 +66,13 @@ def _apply_env_overrides(data: dict) -> dict:
             if env_value == "":
                 converted = None
             else:
-                converted = int(env_value)
+                try:
+                    converted = int(env_value)
+                except ValueError:
+                    raise ConfigError(
+                        f"Environment variable {ENV_PREFIX}{suffix}={env_value!r} "
+                        f"must be an integer"
+                    ) from None
         else:
             converted = env_value if env_value != "" else None
 
@@ -75,6 +85,20 @@ def _apply_env_overrides(data: dict) -> dict:
     return data
 
 
+def _format_validation_errors(exc: ValidationError) -> str:
+    """Turn Pydantic ValidationError into readable bullet list."""
+    lines = ["Configuration errors:"]
+    for err in exc.errors():
+        loc = " -> ".join(str(p) for p in err["loc"])
+        msg = err["msg"]
+        val = err.get("input")
+        hint = f"  - {loc}: {msg}"
+        if val is not None:
+            hint += f" (got: {val!r})"
+        lines.append(hint)
+    return "\n".join(lines)
+
+
 def load_config(path: str | Path = "config.json") -> AppConfig:
     config_path = Path(path)
     local_path = config_path.with_name("config.local.json")
@@ -84,9 +108,21 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
     else:
         raw_data = {}
         if config_path.exists():
-            raw_data = json.loads(config_path.read_text(encoding="utf-8"))
+            try:
+                raw_data = json.loads(config_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                raise ConfigError(
+                    f"Cannot parse {config_path}: {exc.args[0]} "
+                    f"(line {exc.lineno}, col {exc.colno})"
+                ) from exc
         if local_path.exists():
-            local_data = json.loads(local_path.read_text(encoding="utf-8"))
+            try:
+                local_data = json.loads(local_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                raise ConfigError(
+                    f"Cannot parse {local_path}: {exc.args[0]} "
+                    f"(line {exc.lineno}, col {exc.colno})"
+                ) from exc
             raw_data = _merge_dicts(raw_data, local_data)
 
     raw_data = _apply_env_overrides(raw_data)
@@ -94,4 +130,4 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
     try:
         return AppConfig.model_validate(raw_data)
     except ValidationError as exc:
-        raise ValueError(f"Invalid config: {exc}") from exc
+        raise ConfigError(_format_validation_errors(exc)) from exc
