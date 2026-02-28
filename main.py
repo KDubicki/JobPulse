@@ -1,4 +1,6 @@
-from src.config import load_config
+import sys
+
+from src.config import ConfigError, load_config
 from src.filters import OfferFilter, filter_offers
 from src.scrapers import get_scrapers
 from src.storage import SQLiteOfferStore
@@ -15,7 +17,11 @@ def _format_salary(salary_min_pln: int | None, salary_max_pln: int | None) -> st
 
 
 def main() -> None:
-	config = load_config()
+	try:
+		config = load_config()
+	except ConfigError as exc:
+		print(f"[config error] {exc}", file=sys.stderr)
+		sys.exit(1)
 	limit = config.limit
 	db_path = config.db_path
 	filters = config.filters

@@ -83,6 +83,78 @@ pip install -r requirements.txt
 python main.py
 ```
 
+## ⚙️ Configuration
+
+JobPulse loads configuration from three layers (each overrides the previous):
+
+1. **`config.json`** – base configuration (tracked in git)
+2. **`config.local.json`** – personal overrides (gitignored, same schema)
+3. **Environment variables** – highest priority, ideal for CI/Docker
+
+### config.json reference
+
+```jsonc
+{
+  "sources": ["justjoinit"],   // scraper sources to run
+  "limit": 30,                 // max offers per source
+  "db_path": "jobpulse.db",   // SQLite database path
+  "filters": {
+    "min_salary_pln": null,    // minimum salary (int or null)
+    "city": null,              // city name (string or null)
+    "must_have_skills": []     // required skills, e.g. ["Python", "Docker"]
+  }
+}
+```
+
+### config.local.json
+
+Create `config.local.json` next to `config.json` to override any subset of keys
+without modifying the base file. Only the keys you specify are merged:
+
+```json
+{
+  "limit": 10,
+  "filters": {
+    "city": "Warszawa"
+  }
+}
+```
+
+This file is listed in `.gitignore` and should not be committed.
+
+### Environment variables
+
+Any config key can be overridden with a `JOBPULSE_` prefixed env var.
+Nested filter keys use `JOBPULSE_FILTER_` prefix. Lists are comma-separated.
+
+| Variable | Type | Example |
+|---|---|---|
+| `JOBPULSE_SOURCES` | comma-separated list | `justjoinit,nofluffjobs` |
+| `JOBPULSE_LIMIT` | integer | `50` |
+| `JOBPULSE_DB_PATH` | string | `/tmp/jobs.db` |
+| `JOBPULSE_FILTER_MIN_SALARY_PLN` | integer or empty | `15000` |
+| `JOBPULSE_FILTER_CITY` | string or empty | `Kraków` |
+| `JOBPULSE_FILTER_MUST_HAVE_SKILLS` | comma-separated list | `Python,Docker` |
+
+Set a variable to an empty string to clear a nullable field (e.g. `JOBPULSE_FILTER_CITY=`).
+
+### Error handling
+
+If configuration is invalid, JobPulse prints a clear error and exits:
+
+```
+[config error] Configuration errors:
+  - limit: Input should be a valid integer, unable to parse string as an integer (got: 'abc')
+```
+
+```
+[config error] Cannot parse config.json: Illegal trailing comma ... (line 1, col 13)
+```
+
+```
+[config error] Environment variable JOBPULSE_LIMIT='notanumber' must be an integer
+```
+
 ## 📝 Next Steps
 
 1. **Improve field completeness**
