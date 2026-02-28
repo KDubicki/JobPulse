@@ -155,7 +155,61 @@ If configuration is invalid, JobPulse prints a clear error and exits:
 [config error] Environment variable JOBPULSE_LIMIT='notanumber' must be an integer
 ```
 
-## 📝 Next Steps
+## � DB Viewer (`scripts/show_db.py`)
+
+Query stored offers from the command line.
+
+### Basic usage
+
+```bash
+python scripts/show_db.py              # last 20 offers
+python scripts/show_db.py -n 50        # last 50 offers
+python scripts/show_db.py -v           # verbose (show skills + URL)
+```
+
+### Filtering
+
+```bash
+python scripts/show_db.py --city Warszawa
+python scripts/show_db.py --company SCALO --min-salary 15000
+python scripts/show_db.py --skill Python --title Engineer
+python scripts/show_db.py --source justjoinit
+```
+
+All text filters use substring matching (case-insensitive in SQLite default).
+`--min-salary` checks both `salary_min_pln` and `salary_max_pln`.
+
+### Output formats (`-f`)
+
+| Format | Flag | Description |
+|--------|------|-------------|
+| text   | `-f text` (default) | Human-readable, supports `-v` for details |
+| table  | `-f table` | Aligned columns (title, company, city, salary, source) |
+| csv    | `-f csv` | CSV to stdout — pipe to file or other tools |
+| json   | `-f json` | JSON array with deserialized skills list |
+
+```bash
+python scripts/show_db.py -f csv > export.csv
+python scripts/show_db.py -f json --city Kraków | jq '.[].title'
+python scripts/show_db.py -f table --min-salary 20000 -n 10
+```
+
+### All options
+
+```
+--db PATH        SQLite database path (default: jobpulse.db)
+-n, --limit N    Max rows (default: 20)
+--city TEXT       Filter by city
+--company TEXT    Filter by company
+--skill TEXT      Filter by skill name
+--title TEXT      Filter by title
+--source TEXT     Filter by source (exact match)
+--min-salary N   Minimum salary in PLN
+-v, --verbose    Show skills and URL (text format only)
+-f, --format     Output format: text | table | csv | json
+```
+
+## �📝 Next Steps
 
 1. **Improve field completeness**
 	- Add optional detail-page enrichment for `workplace_type`, `employment_type`, and richer salary metadata.
