@@ -1,9 +1,51 @@
 import json
 import sqlite3
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
 from src.models import JobOffer
+
+
+@dataclass
+class OfferQuery:
+    """Declarative query parameters for stored offers."""
+    city: str | None = None
+    company: str | None = None
+    skill: str | None = None
+    title: str | None = None
+    source: str | None = None
+    min_salary: int | None = None
+    limit: int = 20
+
+    def to_sql(self) -> tuple[str, list[object]]:
+        """Return (WHERE+ORDER+LIMIT SQL fragment, params)."""
+        clauses: list[str] = []
+        params: list[object] = []
+
+        if self.city:
+            clauses.append("city LIKE ?")
+            params.append(f"%{self.city}%")
+        if self.company:
+            clauses.append("company LIKE ?")
+            params.append(f"%{self.company}%")
+        if self.skill:
+            clauses.append("skills LIKE ?")
+            params.append(f"%{self.skill}%")
+        if self.title:
+            clauses.append("title LIKE ?")
+            params.append(f"%{self.title}%")
+        if self.source:
+            clauses.append("source = ?")
+            params.append(self.source)
+        if self.min_salary is not None:
+            clauses.append("(salary_min_pln >= ? OR salary_max_pln >= ?)")
+            params.extend([self.min_salary, self.min_salary])
+
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        sql = f"{where} ORDER BY id DESC LIMIT ?"
+        params.append(self.limit)
+        return sql, params
 
 
 class SQLiteOfferStore:
@@ -89,3 +131,36 @@ class SQLiteOfferStore:
                 except sqlite3.IntegrityError:
                     continue
         return inserted
+
+    def count(self) -> int:
+        """Return total number of stored offers."""
+        with sqlite3.connect(self.db_path) as conn:
+            return conn.execute("SELECT count(*) FROM job_offers").fetchone()[0]
+
+    def query_offers(self, query: OfferQuery | None = None) -> list[dict]:
+        """Return offers matching *query* as list of dicts (row factory)."""
+        if query is None:
+            query = OfferQuery()
+
+        where_sql, params = query.to_sql()
+        sql = (
+            "SELECT source, external_id, title, company, city, "
+            "salary_min_pln, salary_max_pln, skills, offer_url"
+            f" FROM job_offers{where_sql}"
+        )
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(sql, params).fetchall()
+
+        results: list[dict] = []
+        for r in rows:
+            d = dict(r)
+            # Deserialize skills back to a list
+            if isinstance(d.get("skills"), str):
+                try:
+                    d["skills"] = json.loads(d["skills"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            results.append(d)
+        return results
