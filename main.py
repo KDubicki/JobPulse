@@ -36,6 +36,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--min-salary", type=int, help="Filter by min salary (overrides config filter)"
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run without saving to database (useful for testing)",
+    )
     return parser.parse_args()
 
 
@@ -59,7 +64,7 @@ def main() -> None:
     if args.min_salary:
         config.filters.min_salary_pln = args.min_salary
 
-    logger.info("Starting JobPulse with sources=%s, limit=%d", config.sources, config.limit)
+    logger.info("Starting JobPulse (dry-run=%s) sources=%s limit=%d", args.dry_run, config.sources, config.limit)
     
     scrapers = get_scrapers(config.sources)
     if not scrapers:
@@ -76,13 +81,18 @@ def main() -> None:
         must_have_skills=config.filters.must_have_skills,
     )
     filtered_offers = filter_offers(offers, offer_filter)
-    store = SQLiteOfferStore(db_path=config.db_path)
-    inserted = store.save_offers(filtered_offers)
+
+    inserted = 0
+    if not args.dry_run:
+        store = SQLiteOfferStore(db_path=config.db_path)
+        inserted = store.save_offers(filtered_offers)
+    else:
+        logger.info("Dry-run enabled: skipping DB save")
 
     print(f"\n[SUMMARY]")
     print(f"Fetched: {len(offers)}")
     print(f"Filtered: {len(filtered_offers)}")
-    print(f"New saved: {inserted}")
+    print(f"New saved: {inserted} (dry-run)" if args.dry_run else f"New saved: {inserted}")
     print("-" * 40)
     
     for index, offer in enumerate(filtered_offers, start=1):

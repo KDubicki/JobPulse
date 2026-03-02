@@ -259,10 +259,3 @@ def _collect_offer_links(timeout: int, limit: int) -> list[tuple[str, list[str]]
         return results
     finally:
         driver.quit()
-
-
-class JustJoinItScraper:
-    source = "justjoinit"
-
-    def fetch_offers(self, limit: int = 20, timeout: int = 15) -> list[JobOffer]:
-        return fetch_justjoinit_offers(limit=limit, timeout=timeout)
