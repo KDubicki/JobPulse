@@ -83,6 +83,29 @@ pip install -r requirements.txt
 python main.py
 ```
 
+Scraper logs are written to `jobpulse.log` and console.
+
+### CLI Arguments
+
+You can override configuration quickly via command-line arguments:
+
+```bash
+# Fetch 5 offers from JustJoinIT
+python main.py --limit 5 --sources justjoinit
+
+# Filter by city and minimum salary
+python main.py --city Warszawa --min-salary 20000
+```
+
+### Dry-Run Mode
+
+Use the `--dry-run` flag to fetch and filter offers without saving them to the database.
+This is useful for testing filters or checking scraper logic.
+
+```bash
+python main.py --dry-run
+```
+
 ## ⚙️ Configuration
 
 JobPulse loads configuration from three layers (each overrides the previous):

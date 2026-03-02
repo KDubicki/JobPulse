@@ -1,10 +1,12 @@
 import json
+import logging
 import os
 from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
 
 ENV_PREFIX = "JOBPULSE_"
+logger = logging.getLogger(__name__)
 
 
 class ConfigError(Exception):
@@ -103,11 +105,14 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
     config_path = Path(path)
     local_path = config_path.with_name("config.local.json")
 
+    logger.debug("Loading config from %s (local: %s)", config_path, local_path)
+
     if not config_path.exists() and not local_path.exists():
         raw_data: dict = {}
     else:
         raw_data = {}
         if config_path.exists():
+            logger.info("Reading base config: %s", config_path)
             try:
                 raw_data = json.loads(config_path.read_text(encoding="utf-8"))
             except json.JSONDecodeError as exc:
@@ -116,6 +121,7 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
                     f"(line {exc.lineno}, col {exc.colno})"
                 ) from exc
         if local_path.exists():
+            logger.info("Applying local overrides: %s", local_path)
             try:
                 local_data = json.loads(local_path.read_text(encoding="utf-8"))
             except json.JSONDecodeError as exc:
@@ -128,6 +134,8 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
     raw_data = _apply_env_overrides(raw_data)
 
     try:
-        return AppConfig.model_validate(raw_data)
+        config = AppConfig.model_validate(raw_data)
+        logger.debug("Loaded config: sources=%s, limit=%s", config.sources, config.limit)
+        return config
     except ValidationError as exc:
         raise ConfigError(_format_validation_errors(exc)) from exc

@@ -34,3 +34,4 @@ Thumbs.db
 
 # Local databases
 *.db
+*.log
