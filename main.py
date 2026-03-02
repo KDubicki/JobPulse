@@ -1,6 +1,7 @@
 import argparse
 import logging
 import sys
+import time
 
 from src.config import AppConfig, ConfigError, load_config
 from src.filters import OfferFilter, filter_offers
@@ -45,6 +46,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    start_time = time.time()
     setup_logging()
     args = parse_args()
 
@@ -89,12 +91,19 @@ def main() -> None:
     else:
         logger.info("Dry-run enabled: skipping DB save")
 
-    print(f"\n[SUMMARY]")
-    print(f"Fetched: {len(offers)}")
-    print(f"Filtered: {len(filtered_offers)}")
-    print(f"New saved: {inserted} (dry-run)" if args.dry_run else f"New saved: {inserted}")
-    print("-" * 40)
+    duration = time.time() - start_time
     
+    # Run Summary
+    print("\n" + "=" * 50)
+    print("JOBPULSE RUN SUMMARY")
+    print("=" * 50)
+    print(f"Total time:       {duration:.2f}s")
+    print(f"Total sources:    {len(config.sources)}")
+    print(f"Offers fetched:   {len(offers)}")
+    print(f"Offers matched:   {len(filtered_offers)}")
+    print(f"New saved:        {inserted} {'(dry-run)' if args.dry_run else ''}")
+    print("-" * 50)
+
     for index, offer in enumerate(filtered_offers, start=1):
         salary = _format_salary(offer.salary_min_pln, offer.salary_max_pln)
         skills_preview = ", ".join(offer.skills[:4]) if offer.skills else "brak"
@@ -102,6 +111,7 @@ def main() -> None:
             f"{index}. {offer.title} | {offer.company} | {offer.city or '?'} | "
             f"salary: {salary} | skills: {skills_preview}"
         )
+    print("=" * 50)
 
 
 if __name__ == "__main__":
