@@ -1,10 +1,13 @@
 import json
+import logging
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
 from src.models import JobOffer
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -51,6 +54,7 @@ class OfferQuery:
 class SQLiteOfferStore:
     def __init__(self, db_path: str | Path = "jobpulse.db") -> None:
         self.db_path = str(db_path)
+        logger.debug("Initializing SQLite store at %s", self.db_path)
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
@@ -96,8 +100,10 @@ class SQLiteOfferStore:
 
     def save_offers(self, offers: list[JobOffer]) -> int:
         if not offers:
+            logger.debug("No offers to save")
             return 0
 
+        logger.info("Saving %d offers to database...", len(offers))
         inserted = 0
         with sqlite3.connect(self.db_path) as conn:
             for offer in offers:
@@ -130,6 +136,7 @@ class SQLiteOfferStore:
                     inserted += 1
                 except sqlite3.IntegrityError:
                     continue
+        logger.info("Inserted %d new offers (duplicates skipped)", inserted)
         return inserted
 
     def count(self) -> int:
