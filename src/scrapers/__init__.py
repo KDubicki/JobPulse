@@ -1,5 +1,5 @@
 from .base import JobScraper
-from .justjoinit import JustJoinItScraper, fetch_justjoinit_offers
+from .justjoinit import JustJoinItScraper
 from .registry import get_scrapers
 
-__all__ = ["JobScraper", "JustJoinItScraper", "fetch_justjoinit_offers", "get_scrapers"]
+__all__ = ["JobScraper", "JustJoinItScraper", "get_scrapers"]
