@@ -1,16 +1,29 @@
 import logging
 import re
-from datetime import datetime
+import time
 from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 from src.models import JobOffer
 
 logger = logging.getLogger(__name__)
 
 THEPROTOCOL_OFFERS_URL = "https://theprotocol.it/praca"
+
+
+def _looks_like_challenge(html: str) -> bool:
+    lowered = html.lower()
+    markers = [
+        "cloudflare",
+        "cierpliwości",
+        "just a moment",
+        "challenge-platform",
+    ]
+    return any(marker in lowered for marker in markers)
 
 
 def _extract_slug(offer_url: str) -> str:
@@ -85,7 +98,7 @@ def _to_job_offer(raw_offer: dict) -> JobOffer:
 def _extract_candidates_from_html(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
 
-    if "cloudflare" in html.lower() and "cierpliwości" in html.lower():
+    if _looks_like_challenge(html):
         return []
 
     candidates: list[dict] = []
@@ -141,6 +154,69 @@ def _extract_candidates_from_html(html: str) -> list[dict]:
     return candidates
 
 
+def _fetch_with_requests(timeout: int, retries: int = 2) -> str | None:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cache-Control": "no-cache",
+    }
+
+    for attempt in range(retries + 1):
+        try:
+            response = requests.get(THEPROTOCOL_OFFERS_URL, timeout=timeout, headers=headers)
+            response.raise_for_status()
+            html = response.text
+            if _looks_like_challenge(html):
+                logger.warning("TheProtocol responded with challenge page on attempt %d", attempt + 1)
+                return None
+            return html
+        except requests.RequestException as exc:
+            is_last = attempt >= retries
+            if is_last:
+                logger.error("TheProtocol request failed after retries: %s", exc)
+                return None
+            sleep_seconds = 1 + attempt
+            logger.warning("TheProtocol request failed (attempt %d/%d): %s; retry in %ss", attempt + 1, retries + 1, exc, sleep_seconds)
+            time.sleep(sleep_seconds)
+
+    return None
+
+
+def _fetch_with_selenium(timeout: int) -> str | None:
+    logger.info("Trying Selenium fallback for TheProtocol")
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--no-sandbox")
+
+    try:
+        driver = webdriver.Chrome(options=options)
+    except Exception as exc:
+        logger.error("Failed to initialize Selenium for TheProtocol fallback: %s", exc)
+        return None
+
+    try:
+        driver.set_page_load_timeout(timeout)
+        driver.get(THEPROTOCOL_OFFERS_URL)
+        html = driver.page_source
+        if _looks_like_challenge(html):
+            logger.warning("Selenium fallback also received challenge page")
+            return None
+        return html
+    except Exception as exc:
+        logger.error("Selenium fallback failed: %s", exc)
+        return None
+    finally:
+        driver.quit()
+
+
 class TheProtocolScraper:
     """Scraper for theprotocol.it job board."""
 
@@ -149,24 +225,13 @@ class TheProtocolScraper:
     def fetch_offers(self, limit: int = 20, timeout: int = 15) -> list[JobOffer]:
         logger.info("Starting TheProtocol scrape (limit=%d, timeout=%ds)", limit, timeout)
 
-        try:
-            response = requests.get(
-                THEPROTOCOL_OFFERS_URL,
-                timeout=timeout,
-                headers={
-                    "User-Agent": (
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/124.0.0.0 Safari/537.36"
-                    )
-                },
-            )
-            response.raise_for_status()
-        except requests.RequestException as exc:
-            logger.error("TheProtocol request failed: %s", exc)
+        html = _fetch_with_requests(timeout=timeout, retries=2)
+        if html is None:
+            html = _fetch_with_selenium(timeout=timeout)
+        if html is None:
             return []
 
-        raw_candidates = _extract_candidates_from_html(response.text)
+        raw_candidates = _extract_candidates_from_html(html)
         if not raw_candidates:
             logger.warning("No TheProtocol candidates extracted (possibly blocked or layout changed)")
             return []
