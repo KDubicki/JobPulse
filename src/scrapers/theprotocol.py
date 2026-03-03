@@ -16,14 +16,20 @@ THEPROTOCOL_OFFERS_URL = "https://theprotocol.it/praca"
 
 
 def _looks_like_challenge(html: str) -> bool:
+    return _challenge_reason(html) is not None
+
+
+def _challenge_reason(html: str) -> str | None:
     lowered = html.lower()
-    markers = [
-        "cloudflare",
-        "cierpliwości",
-        "just a moment",
-        "challenge-platform",
-    ]
-    return any(marker in lowered for marker in markers)
+    if "cloudflare" in lowered:
+        return "cloudflare"
+    if "challenge-platform" in lowered:
+        return "challenge-platform"
+    if "cierpliwości" in lowered:
+        return "cierpliwosc-page"
+    if "just a moment" in lowered:
+        return "just-a-moment"
+    return None
 
 
 def _extract_slug(offer_url: str) -> str:
@@ -98,7 +104,9 @@ def _to_job_offer(raw_offer: dict) -> JobOffer:
 def _extract_candidates_from_html(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
 
-    if _looks_like_challenge(html):
+    challenge = _challenge_reason(html)
+    if challenge is not None:
+        logger.warning("TheProtocol HTML recognized as challenge page (%s)", challenge)
         return []
 
     candidates: list[dict] = []
@@ -151,10 +159,11 @@ def _extract_candidates_from_html(html: str) -> list[dict]:
             }
         )
 
+    logger.debug("TheProtocol HTML extraction produced %d candidate links", len(candidates))
     return candidates
 
 
-def _fetch_with_requests(timeout: int, retries: int = 2) -> str | None:
+def _fetch_with_requests(timeout: int, retries: int = 2) -> tuple[str | None, str]:
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -168,26 +177,40 @@ def _fetch_with_requests(timeout: int, retries: int = 2) -> str | None:
 
     for attempt in range(retries + 1):
         try:
+            start = time.perf_counter()
             response = requests.get(THEPROTOCOL_OFFERS_URL, timeout=timeout, headers=headers)
+            elapsed = time.perf_counter() - start
+            logger.debug(
+                "TheProtocol requests attempt=%d status=%s elapsed=%.2fs bytes=%d",
+                attempt + 1,
+                response.status_code,
+                elapsed,
+                len(response.text),
+            )
             response.raise_for_status()
             html = response.text
-            if _looks_like_challenge(html):
-                logger.warning("TheProtocol responded with challenge page on attempt %d", attempt + 1)
-                return None
-            return html
+            challenge = _challenge_reason(html)
+            if challenge is not None:
+                logger.warning(
+                    "TheProtocol responded with challenge page (%s) on attempt %d",
+                    challenge,
+                    attempt + 1,
+                )
+                return None, "requests:challenge"
+            return html, "requests"
         except requests.RequestException as exc:
             is_last = attempt >= retries
             if is_last:
                 logger.error("TheProtocol request failed after retries: %s", exc)
-                return None
+                return None, "requests:error"
             sleep_seconds = 1 + attempt
             logger.warning("TheProtocol request failed (attempt %d/%d): %s; retry in %ss", attempt + 1, retries + 1, exc, sleep_seconds)
             time.sleep(sleep_seconds)
 
-    return None
+    return None, "requests:unknown"
 
 
-def _fetch_with_selenium(timeout: int) -> str | None:
+def _fetch_with_selenium(timeout: int) -> tuple[str | None, str]:
     logger.info("Trying Selenium fallback for TheProtocol")
     options = Options()
     options.add_argument("--headless=new")
@@ -200,19 +223,23 @@ def _fetch_with_selenium(timeout: int) -> str | None:
         driver = webdriver.Chrome(options=options)
     except Exception as exc:
         logger.error("Failed to initialize Selenium for TheProtocol fallback: %s", exc)
-        return None
+        return None, "selenium:init-error"
 
     try:
+        start = time.perf_counter()
         driver.set_page_load_timeout(timeout)
         driver.get(THEPROTOCOL_OFFERS_URL)
+        elapsed = time.perf_counter() - start
         html = driver.page_source
-        if _looks_like_challenge(html):
-            logger.warning("Selenium fallback also received challenge page")
-            return None
-        return html
+        challenge = _challenge_reason(html)
+        if challenge is not None:
+            logger.warning("Selenium fallback also received challenge page (%s)", challenge)
+            return None, "selenium:challenge"
+        logger.debug("Selenium fallback succeeded in %.2fs (bytes=%d)", elapsed, len(html))
+        return html, "selenium"
     except Exception as exc:
         logger.error("Selenium fallback failed: %s", exc)
-        return None
+        return None, "selenium:error"
     finally:
         driver.quit()
 
@@ -223,26 +250,40 @@ class TheProtocolScraper:
     source = "theprotocol"
 
     def fetch_offers(self, limit: int = 20, timeout: int = 15) -> list[JobOffer]:
+        run_start = time.perf_counter()
         logger.info("Starting TheProtocol scrape (limit=%d, timeout=%ds)", limit, timeout)
 
-        html = _fetch_with_requests(timeout=timeout, retries=2)
+        html, mode = _fetch_with_requests(timeout=timeout, retries=2)
         if html is None:
-            html = _fetch_with_selenium(timeout=timeout)
+            html, mode = _fetch_with_selenium(timeout=timeout)
         if html is None:
+            logger.warning("TheProtocol scrape finished with no HTML (mode=%s)", mode)
             return []
+
+        logger.info("TheProtocol HTML acquired via mode=%s", mode)
 
         raw_candidates = _extract_candidates_from_html(html)
         if not raw_candidates:
             logger.warning("No TheProtocol candidates extracted (possibly blocked or layout changed)")
             return []
 
+        logger.info("TheProtocol candidate pool size: %d", len(raw_candidates))
+
         offers: list[JobOffer] = []
+        map_failures = 0
         for candidate in raw_candidates[:limit]:
             try:
                 offers.append(_to_job_offer(candidate))
             except Exception as exc:
+                map_failures += 1
                 logger.warning("Failed to map TheProtocol offer: %s", exc)
                 continue
 
-        logger.info("Mapped %d TheProtocol offers", len(offers))
+        duration = time.perf_counter() - run_start
+        logger.info(
+            "Mapped %d TheProtocol offers (failures=%d, duration=%.2fs)",
+            len(offers),
+            map_failures,
+            duration,
+        )
         return offers
