@@ -20,6 +20,7 @@ The initial proof-of-concept is implemented.
 - Project skeleton and package structure (`src/models`, `src/scrapers`, `main.py`)
 - Unified `JobOffer` data model using Pydantic
 - First JustJoinIT scraper (Selenium-based)
+- The Protocol scraper (work in progress, blocked by Cloudflare)
 - Scraper interface and class-based source integration
 - Scraper registry driven by `config.json` sources
 - Basic pipeline in `main.py`:
