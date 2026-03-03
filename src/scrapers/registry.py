@@ -1,9 +1,10 @@
-from src.scrapers import JobScraper, JustJoinItScraper
+from src.scrapers import JobScraper, JustJoinItScraper, TheProtocolScraper
 
 
 def get_scrapers(sources: list[str]) -> list[JobScraper]:
     available = {
         "justjoinit": JustJoinItScraper,
+        "theprotocol": TheProtocolScraper,
     }
 
     scrapers: list[JobScraper] = []

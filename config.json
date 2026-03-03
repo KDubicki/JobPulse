@@ -1,5 +1,5 @@
 {
-  "sources": ["justjoinit"],
+  "sources": ["justjoinit", "theprotocol"],
   "limit": 30,
   "db_path": "jobpulse.db",
   "filters": {
