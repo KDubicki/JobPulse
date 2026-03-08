@@ -35,3 +35,4 @@ Thumbs.db
 # Local databases
 *.db
 *.log
+.jobpulse_cache.json

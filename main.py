@@ -2,12 +2,15 @@ import argparse
 import csv
 import json
 import logging
+import os
 import sys
 import time
+from pathlib import Path
 
 from src.config import AppConfig, ConfigError, load_config
 from src.filters import OfferFilter, filter_offers
 from src.logger import setup_logging
+from src.models import JobOffer
 from src.scrapers import get_scrapers
 from src.storage import SQLiteOfferStore
 
@@ -40,6 +43,25 @@ def parse_args() -> argparse.Namespace:
         "--min-salary", type=int, help="Filter by min salary (overrides config filter)"
     )
     parser.add_argument(
+        "--skills-match",
+        choices=["all", "any"],
+        default="all",
+        help="Match all skills or any skill from --skills (default: all)",
+    )
+    parser.add_argument(
+        "--skills",
+        help="Comma-separated skills list (overrides config filter)",
+    )
+    parser.add_argument(
+        "--title-regex",
+        help="Regex to match offer title (case-insensitive)",
+    )
+    parser.add_argument(
+        "--workplace",
+        choices=["remote", "hybrid", "office", "unknown"],
+        help="Filter by workplace type",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Run without saving to database (useful for testing)",
@@ -47,6 +69,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         help="Export filtered offers to a file (.csv or .json)",
+    )
+    parser.add_argument(
+        "--cache-path",
+        default=".jobpulse_cache.json",
+        help="Path to cache file (default: .jobpulse_cache.json)",
+    )
+    parser.add_argument(
+        "--cache-ttl",
+        type=int,
+        default=0,
+        help="Cache TTL in seconds (0 disables cache)",
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Disable cache even if TTL is set",
     )
     return parser.parse_args()
 
@@ -93,6 +131,41 @@ def _export_offers(offers: list["JobOffer"], output_path: str) -> None:
     logger.error("Unsupported output format for %s (use .csv or .json)", output_path)
 
 
+def _load_cache(cache_path: Path) -> dict:
+    if not cache_path.exists():
+        return {}
+    try:
+        return json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        logger.warning("Failed to read cache file: %s", cache_path)
+        return {}
+
+
+def _save_cache(cache_path: Path, payload: dict) -> None:
+    try:
+        cache_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError as exc:
+        logger.warning("Failed to write cache file %s: %s", cache_path, exc)
+
+
+def _offers_to_cache_payload(offers: list["JobOffer"]) -> list[dict]:
+    return [offer.model_dump(mode="json") for offer in offers]
+
+
+def _offers_from_cache_payload(payload: list[dict]) -> list["JobOffer"]:
+    return [JobOffer.model_validate(item) for item in payload]
+
+
+def _should_use_cache(cache_entry: dict, ttl: int) -> bool:
+    if ttl <= 0:
+        return False
+    ts = cache_entry.get("ts")
+    if not isinstance(ts, (int, float)):
+        return False
+    age = time.time() - ts
+    return age <= ttl
+
+
 def main() -> None:
     start_time = time.time()
     setup_logging()
@@ -113,6 +186,8 @@ def main() -> None:
         config.filters.city = args.city
     if args.min_salary:
         config.filters.min_salary_pln = args.min_salary
+    if args.skills:
+        config.filters.must_have_skills = [s.strip() for s in args.skills.split(",") if s.strip()]
 
     logger.info("Starting JobPulse (dry-run=%s) sources=%s limit=%d", args.dry_run, config.sources, config.limit)
     
@@ -121,14 +196,38 @@ def main() -> None:
         logger.warning("No valid scrapers enabled. Check your config/sources.")
         return
 
+    cache_path = Path(args.cache_path)
+    cache_data = _load_cache(cache_path)
+
     offers = []
     for scraper in scrapers:
-        offers.extend(scraper.fetch_offers(limit=config.limit))
+        cache_key = f"{scraper.source}:{config.limit}"
+        cache_entry = cache_data.get(cache_key) if isinstance(cache_data, dict) else None
+        if not args.no_cache and _should_use_cache(cache_entry or {}, args.cache_ttl):
+            logger.info("Cache hit for %s (ttl=%ss)", cache_key, args.cache_ttl)
+            cached_offers = _offers_from_cache_payload(cache_entry.get("offers", []))
+            offers.extend(cached_offers)
+            continue
+
+        fresh_offers = scraper.fetch_offers(limit=config.limit)
+        offers.extend(fresh_offers)
+
+        if args.cache_ttl > 0 and not args.no_cache:
+            cache_data[cache_key] = {
+                "ts": time.time(),
+                "offers": _offers_to_cache_payload(fresh_offers),
+            }
+
+    if args.cache_ttl > 0 and not args.no_cache:
+        _save_cache(cache_path, cache_data)
 
     offer_filter = OfferFilter(
         min_salary_pln=config.filters.min_salary_pln,
         city=config.filters.city,
         must_have_skills=config.filters.must_have_skills,
+        skills_match=args.skills_match,
+        title_regex=args.title_regex,
+        workplace_type=args.workplace,
     )
     filtered_offers = filter_offers(offers, offer_filter)
 

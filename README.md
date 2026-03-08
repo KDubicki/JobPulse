@@ -96,6 +96,14 @@ python main.py --limit 5 --sources justjoinit
 
 # Filter by city and minimum salary
 python main.py --city Warszawa --min-salary 20000
+
+# Export filtered offers
+python main.py --output exports.json
+python main.py --output exports.csv
+
+# Advanced filtering
+python main.py --skills "Python,SQL" --skills-match any --title-regex "Engineer"
+python main.py --workplace remote
 ```
 
 ### Dry-Run Mode
@@ -105,6 +113,25 @@ This is useful for testing filters or checking scraper logic.
 
 ```bash
 python main.py --dry-run
+```
+
+### Cache (TTL)
+
+To avoid re-scraping the same source repeatedly, enable cache with TTL (seconds):
+
+```bash
+python main.py --cache-ttl 300
+python main.py --cache-ttl 300 --cache-path .jobpulse_cache.json
+python main.py --cache-ttl 300 --no-cache
+```
+
+### Export output
+
+Save filtered offers to a file (CSV or JSON):
+
+```bash
+python main.py --output offers.json
+python main.py --output offers.csv
 ```
 
 ## ⚙️ Configuration

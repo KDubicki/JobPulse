@@ -137,6 +137,8 @@ def _extract_slug(offer_url: str) -> str:
 
 
 class JustJoinItScraper:
+    source = "justjoinit"
+
     def __init__(self, driver_timeout: int = 15) -> None:
         self.driver_timeout = driver_timeout
 
