@@ -43,6 +43,25 @@ def parse_args() -> argparse.Namespace:
         "--min-salary", type=int, help="Filter by min salary (overrides config filter)"
     )
     parser.add_argument(
+        "--skills-match",
+        choices=["all", "any"],
+        default="all",
+        help="Match all skills or any skill from --skills (default: all)",
+    )
+    parser.add_argument(
+        "--skills",
+        help="Comma-separated skills list (overrides config filter)",
+    )
+    parser.add_argument(
+        "--title-regex",
+        help="Regex to match offer title (case-insensitive)",
+    )
+    parser.add_argument(
+        "--workplace",
+        choices=["remote", "hybrid", "office", "unknown"],
+        help="Filter by workplace type",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Run without saving to database (useful for testing)",
@@ -167,6 +186,8 @@ def main() -> None:
         config.filters.city = args.city
     if args.min_salary:
         config.filters.min_salary_pln = args.min_salary
+    if args.skills:
+        config.filters.must_have_skills = [s.strip() for s in args.skills.split(",") if s.strip()]
 
     logger.info("Starting JobPulse (dry-run=%s) sources=%s limit=%d", args.dry_run, config.sources, config.limit)
     
@@ -204,6 +225,9 @@ def main() -> None:
         min_salary_pln=config.filters.min_salary_pln,
         city=config.filters.city,
         must_have_skills=config.filters.must_have_skills,
+        skills_match=args.skills_match,
+        title_regex=args.title_regex,
+        workplace_type=args.workplace,
     )
     filtered_offers = filter_offers(offers, offer_filter)
 
