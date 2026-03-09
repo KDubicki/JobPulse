@@ -86,6 +86,20 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable cache even if TTL is set",
     )
+    parser.add_argument(
+        "--summary-only",
+        action="store_true",
+        help="Print only summary (skip listing offers)",
+    )
+    parser.add_argument(
+        "--profile",
+        help="Profile name from profiles.json (filters override config)",
+    )
+    parser.add_argument(
+        "--profiles-path",
+        default="profiles.json",
+        help="Path to profiles file (default: profiles.json)",
+    )
     return parser.parse_args()
 
 
@@ -166,6 +180,36 @@ def _should_use_cache(cache_entry: dict, ttl: int) -> bool:
     return age <= ttl
 
 
+def _load_profiles(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.error("Failed to read profiles file %s: %s", path, exc)
+        return {}
+
+
+def _apply_profile(config: AppConfig, profile_data: dict) -> None:
+    # Allow profile to define filters at root or under "filters" key.
+    filters = profile_data.get("filters") if isinstance(profile_data, dict) else None
+    if not isinstance(filters, dict):
+        filters = profile_data if isinstance(profile_data, dict) else {}
+
+    if "min_salary_pln" in filters:
+        config.filters.min_salary_pln = filters.get("min_salary_pln")
+    if "city" in filters:
+        config.filters.city = filters.get("city")
+    if "must_have_skills" in filters:
+        config.filters.must_have_skills = filters.get("must_have_skills") or []
+
+    # Optional high-level overrides
+    if "sources" in profile_data and isinstance(profile_data.get("sources"), list):
+        config.sources = profile_data.get("sources")
+    if "limit" in profile_data and isinstance(profile_data.get("limit"), int):
+        config.limit = profile_data.get("limit")
+
+
 def main() -> None:
     start_time = time.time()
     setup_logging()
@@ -176,6 +220,16 @@ def main() -> None:
     except ConfigError as exc:
         print(f"[config error] {exc}", file=sys.stderr)
         sys.exit(1)
+
+    if args.profile:
+        profiles_path = Path(args.profiles_path)
+        profiles = _load_profiles(profiles_path)
+        profile_data = profiles.get(args.profile) if isinstance(profiles, dict) else None
+        if not isinstance(profile_data, dict):
+            print(f"[config error] Profile '{args.profile}' not found in {profiles_path}", file=sys.stderr)
+            sys.exit(1)
+        logger.info("Applying profile '%s' from %s", args.profile, profiles_path)
+        _apply_profile(config, profile_data)
 
     # CLI args override config
     if args.limit:
@@ -254,13 +308,14 @@ def main() -> None:
     print(f"New saved:        {inserted} {'(dry-run)' if args.dry_run else ''}")
     print("-" * 50)
 
-    for index, offer in enumerate(filtered_offers, start=1):
-        salary = _format_salary(offer.salary_min_pln, offer.salary_max_pln)
-        skills_preview = ", ".join(offer.skills[:4]) if offer.skills else "brak"
-        print(
-            f"{index}. {offer.title} | {offer.company} | {offer.city or '?'} | "
-            f"salary: {salary} | skills: {skills_preview}"
-        )
+    if not args.summary_only:
+        for index, offer in enumerate(filtered_offers, start=1):
+            salary = _format_salary(offer.salary_min_pln, offer.salary_max_pln)
+            skills_preview = ", ".join(offer.skills[:4]) if offer.skills else "brak"
+            print(
+                f"{index}. {offer.title} | {offer.company} | {offer.city or '?'} | "
+                f"salary: {salary} | skills: {skills_preview}"
+            )
     print("=" * 50)
 
 

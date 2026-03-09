@@ -1,0 +1,17 @@
+{
+  "dev": {
+    "filters": {
+      "min_salary_pln": 15000,
+      "city": "Warszawa",
+      "must_have_skills": ["Python", "SQL"]
+    },
+    "sources": ["justjoinit"],
+    "limit": 20
+  },
+  "remote": {
+    "filters": {
+      "city": "Remote",
+      "must_have_skills": ["Docker"]
+    }
+  }
+}

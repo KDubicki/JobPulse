@@ -104,6 +104,12 @@ python main.py --output exports.csv
 # Advanced filtering
 python main.py --skills "Python,SQL" --skills-match any --title-regex "Engineer"
 python main.py --workplace remote
+
+# Summary only (skip listing offers)
+python main.py --summary-only
+
+# Profiles
+python main.py --profile dev --profiles-path profiles.json
 ```
 
 ### Dry-Run Mode
@@ -125,6 +131,28 @@ python main.py --cache-ttl 300 --cache-path .jobpulse_cache.json
 python main.py --cache-ttl 300 --no-cache
 ```
 
+### Profiles
+
+Define reusable filter sets in a JSON file and select them with `--profile`.
+
+```json
+{
+	"dev": {
+		"filters": {
+			"min_salary_pln": 15000,
+			"city": "Warszawa",
+			"must_have_skills": ["Python", "SQL"]
+		},
+		"sources": ["justjoinit"],
+		"limit": 20
+	}
+}
+```
+
+```bash
+python main.py --profile dev --profiles-path profiles.json
+```
+
 ### Export output
 
 Save filtered offers to a file (CSV or JSON):
@@ -133,6 +161,11 @@ Save filtered offers to a file (CSV or JSON):
 python main.py --output offers.json
 python main.py --output offers.csv
 ```
+
+### Debug snapshots (JustJoinIT)
+
+If JustJoinIT returns no results, the scraper writes an HTML snapshot to `snapshots/`.
+You can customize the directory with `JOBPULSE_SNAPSHOT_DIR`.
 
 ## ⚙️ Configuration
 

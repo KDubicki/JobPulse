@@ -1,5 +1,7 @@
 import logging
+import os
 import re
+import time
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -139,16 +141,33 @@ def _extract_slug(offer_url: str) -> str:
 class JustJoinItScraper:
     source = "justjoinit"
 
-    def __init__(self, driver_timeout: int = 15) -> None:
+    def __init__(self, driver_timeout: int = 15, retries: int = 2) -> None:
         self.driver_timeout = driver_timeout
+        self.retries = retries
 
     def fetch_offers(self, limit: int = 20) -> list[JobOffer]:
-        logger.info("Starting JustJoinIT scrape (limit=%d, timeout=%ds)", limit, self.driver_timeout)
-        try:
-            raw_items = _collect_offer_links(timeout=self.driver_timeout, limit=limit)
-            logger.info("Found %d raw items", len(raw_items))
-        except (TimeoutException, WebDriverException) as exc:
-            logger.error("Selenium error during scrape: %s", exc)
+        logger.info(
+            "Starting JustJoinIT scrape (limit=%d, timeout=%ds, retries=%d)",
+            limit,
+            self.driver_timeout,
+            self.retries,
+        )
+
+        raw_items: list[tuple[str, list[str]]] = []
+        last_error: Exception | None = None
+        for attempt in range(self.retries + 1):
+            try:
+                raw_items = _collect_offer_links(timeout=self.driver_timeout, limit=limit)
+                logger.info("Found %d raw items", len(raw_items))
+                break
+            except (TimeoutException, WebDriverException) as exc:
+                last_error = exc
+                logger.warning("JustJoinIT scrape failed (attempt %d/%d): %s", attempt + 1, self.retries + 1, exc)
+                time.sleep(1 + attempt)
+                continue
+
+        if not raw_items and last_error is not None:
+            logger.error("JustJoinIT scrape failed after retries: %s", last_error)
             return []
 
         if not raw_items:
@@ -258,6 +277,22 @@ def _collect_offer_links(timeout: int, limit: int) -> list[tuple[str, list[str]]
                 
                 results.append((href, lines))
         
+        if not results:
+            _dump_snapshot(driver, reason="no-results")
         return results
     finally:
         driver.quit()
+
+
+def _dump_snapshot(driver: webdriver.Chrome, reason: str) -> None:
+    output_dir = os.environ.get("JOBPULSE_SNAPSHOT_DIR", "snapshots")
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    html_path = os.path.join(output_dir, f"justjoinit_{reason}_{timestamp}.html")
+
+    try:
+        with open(html_path, "w", encoding="utf-8") as handle:
+            handle.write(driver.page_source)
+        logger.warning("Saved JustJoinIT snapshot to %s", html_path)
+    except OSError as exc:
+        logger.warning("Failed to write JustJoinIT snapshot: %s", exc)
