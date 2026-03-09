@@ -86,6 +86,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable cache even if TTL is set",
     )
+    parser.add_argument(
+        "--summary-only",
+        action="store_true",
+        help="Print only summary (skip listing offers)",
+    )
     return parser.parse_args()
 
 
@@ -254,13 +259,14 @@ def main() -> None:
     print(f"New saved:        {inserted} {'(dry-run)' if args.dry_run else ''}")
     print("-" * 50)
 
-    for index, offer in enumerate(filtered_offers, start=1):
-        salary = _format_salary(offer.salary_min_pln, offer.salary_max_pln)
-        skills_preview = ", ".join(offer.skills[:4]) if offer.skills else "brak"
-        print(
-            f"{index}. {offer.title} | {offer.company} | {offer.city or '?'} | "
-            f"salary: {salary} | skills: {skills_preview}"
-        )
+    if not args.summary_only:
+        for index, offer in enumerate(filtered_offers, start=1):
+            salary = _format_salary(offer.salary_min_pln, offer.salary_max_pln)
+            skills_preview = ", ".join(offer.skills[:4]) if offer.skills else "brak"
+            print(
+                f"{index}. {offer.title} | {offer.company} | {offer.city or '?'} | "
+                f"salary: {salary} | skills: {skills_preview}"
+            )
     print("=" * 50)
 
 
