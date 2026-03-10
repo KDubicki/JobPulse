@@ -92,6 +92,22 @@ def parse_args() -> argparse.Namespace:
         help="Print only summary (skip listing offers)",
     )
     parser.add_argument(
+        "--max-print",
+        type=int,
+        default=0,
+        help="Max offers to print in the console (0 = all)",
+    )
+    parser.add_argument(
+        "--summary-json",
+        help="Write run summary to a JSON file",
+    )
+    parser.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Console log level (default: INFO)",
+    )
+    parser.add_argument(
         "--profile",
         help="Profile name from profiles.json (filters override config)",
     )
@@ -180,6 +196,15 @@ def _should_use_cache(cache_entry: dict, ttl: int) -> bool:
     return age <= ttl
 
 
+def _write_summary_json(path: str, summary: dict) -> None:
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(summary, handle, ensure_ascii=False, indent=2)
+        logger.info("Wrote summary JSON to %s", path)
+    except OSError as exc:
+        logger.warning("Failed to write summary JSON %s: %s", path, exc)
+
+
 def _load_profiles(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -212,8 +237,8 @@ def _apply_profile(config: AppConfig, profile_data: dict) -> None:
 
 def main() -> None:
     start_time = time.time()
-    setup_logging()
     args = parse_args()
+    setup_logging(log_level=args.log_level)
 
     try:
         config = load_config()
@@ -296,6 +321,14 @@ def main() -> None:
         logger.info("Dry-run enabled: skipping DB save")
 
     duration = time.time() - start_time
+    summary = {
+        "duration_seconds": round(duration, 2),
+        "sources": config.sources,
+        "offers_fetched": len(offers),
+        "offers_matched": len(filtered_offers),
+        "new_saved": inserted,
+        "dry_run": args.dry_run,
+    }
     
     # Run Summary
     print("\n" + "=" * 50)
@@ -310,6 +343,8 @@ def main() -> None:
 
     if not args.summary_only:
         for index, offer in enumerate(filtered_offers, start=1):
+            if args.max_print and index > args.max_print:
+                break
             salary = _format_salary(offer.salary_min_pln, offer.salary_max_pln)
             skills_preview = ", ".join(offer.skills[:4]) if offer.skills else "brak"
             print(
@@ -317,6 +352,9 @@ def main() -> None:
                 f"salary: {salary} | skills: {skills_preview}"
             )
     print("=" * 50)
+
+    if args.summary_json:
+        _write_summary_json(args.summary_json, summary)
 
 
 if __name__ == "__main__":
