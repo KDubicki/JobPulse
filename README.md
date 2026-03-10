@@ -108,6 +108,15 @@ python main.py --workplace remote
 # Summary only (skip listing offers)
 python main.py --summary-only
 
+# Limit printed offers
+python main.py --max-print 10
+
+# Save run summary as JSON
+python main.py --summary-json run_summary.json
+
+# Control console log level
+python main.py --log-level WARNING
+
 # Profiles
 python main.py --profile dev --profiles-path profiles.json
 ```
@@ -160,6 +169,14 @@ Save filtered offers to a file (CSV or JSON):
 ```bash
 python main.py --output offers.json
 python main.py --output offers.csv
+```
+
+### Summary JSON
+
+Write a run summary to a JSON file:
+
+```bash
+python main.py --summary-json run_summary.json
 ```
 
 ### Debug snapshots (JustJoinIT)

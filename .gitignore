@@ -37,3 +37,4 @@ Thumbs.db
 *.log
 .jobpulse_cache.json
 snapshots/
+run_summary.json
